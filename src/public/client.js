@@ -9,15 +9,26 @@ const initialStore = Map({
     selectedRover: null,
     selectedSol: 0,
     roversManifest: null,
+    solDate: null,
     rovers: ["curiosity", "opportunity", "spirit"],
 });
 
 const root = document.getElementById(
     "root");
 
-const updateStore = (store, newStore) => {
+// updateStore is an higher order function that accepts a function
+// and let user use the new state in a callback function after render
+const updateStore = (store, updatedStore, blockRenderingCb) => {
     let prevStore = fromJS(store);
-    render(root, prevStore.merge(newStore).toJS());
+    let newStore = prevStore.merge(updatedStore).toJS();
+
+    // only if blockRenderingCb returns true render is not called
+    if (blockRenderingCb) {
+        if (!blockRenderingCb(store)) render(root, newStore);
+    }
+    else {
+        render(root, newStore);
+    }
 };
 
 const render = (root, store) => {
@@ -25,19 +36,19 @@ const render = (root, store) => {
     attachListeners(store);
 };
 
-// create content
 const App = (store) => {
     let { rovers, apod, roversManifest, selectedRover } = store;
 
     //return gallery or dashboard on selection
     if (roversManifest) {
+        // if dom is rendered attachListeners
         return `
         ${ MakeHeader(rovers, selectedRover) }
         ${ selectedRover ? SetGallery(store) : ImageOfTheDay(apod, store) + SetRovers(roversManifest, store)}
         ${addFooter()}`;
     }
     else {
-        getRoverManifest(store);
+        getRoverManifest(store, getDefaultHost);
         return ShowLoader();
     }
 };
@@ -58,10 +69,13 @@ const attachListeners = (store) => {
                         let selectedRover = store.roversManifest
                             .filter(item => item.name.toLowerCase() === rover);
                         let roverMaxSol = selectedRover.reduce((acc, item) => item.max_sol, 0);
-                        updateStore(store, { selectedRover: rover, roverMaxSol, selectedSol: roverMaxSol, roverPhotos: "" });
+                        let maxSolDate = selectedRover.reduce((acc, item) => item.max_date, 0);
+                        updateStore(store, { selectedRover: rover, roverMaxSol,
+                            selectedSol: roverMaxSol, roverPhotos: "", solDate:  maxSolDate});
                     }
                     else {
-                        updateStore(store, { selectedRover: null, selectedSol: null, roverPhotos: "" });
+                        updateStore(store, { selectedRover: null, selectedSol: null,
+                            solDate: null, roverPhotos: "" });
                     }
                 }
             });
@@ -102,7 +116,7 @@ const ShowLoader = () => {
 const SetGallery = (store) => {
     let { selectedRover, roverMaxSol, selectedSol, roverPhotos } = store;
     if (!roverPhotos){
-        getRoverPhotos(selectedRover, selectedSol, store);
+        getRoverPhotos(store, getDefaultHost);
         return ShowLoader();
     }
     else {
@@ -110,16 +124,16 @@ const SetGallery = (store) => {
         <div class="container gallery">
 
             <div class="row">
-                <h2>Rover "${selectedRover}" photos of Sol ${selectedSol}</h2>
+                <h2>Rover: ${selectedRover} / Date: ${roverPhotos.length > 0 ? roverPhotos[0]["earth_date"] : "N/A"} / Sol: ${selectedSol}</h2>
             </div>
             <div class="row">
-            ${roverPhotos.map((photo) => {
+            ${roverPhotos.length > 0 ? roverPhotos.map((photo) => {
                 return (`
                     <a href="${photo.img_src}" data-toggle="lightbox" data-gallery="gallery" class="col-md-4 margin10" data-key="${photo.id}">
                       <img src="${photo.img_src}" class="img-fluid rounded">
                     </a>
                 `);
-            }).join("")}
+            }).join("") : "<h4>No photos found for this Sol</h4>"}
             </div>
             <div class="btn-group float-right" role="group" aria-label="Basic example">
                 <button type="button" id="nextSol" class="btn btn-secondary" ${selectedSol+1>roverMaxSol ? 'disabled' : ''}>
@@ -164,7 +178,7 @@ const MakeHeader = (rovers, selectedRover) => {
 const ImageOfTheDay = (apod, store) => {
 
     if (!apod || !apod.image) {
-        getImageOfTheDay(store);
+        getImageOfTheDay(store, getDefaultHost);
         return ShowLoader();
     }
     else {
@@ -209,7 +223,7 @@ const ImageOfTheDay = (apod, store) => {
 const SetRovers = (roversManifest, store) => {
 
     if (!roversManifest) {
-        getRoverManifest(store);
+        getRoverManifest(store, getDefaultHost);
     }
     else {
         return (`
@@ -250,6 +264,10 @@ const SetRovers = (roversManifest, store) => {
                                   <td>${rover.status}</td>
                                 </tr>
                                 <tr>
+                                  <td>Max Date</td>
+                                  <td>${rover.max_date}</td>
+                                </tr>
+                                <tr>
                                   <td>Total Sol</td>
                                   <td>${rover.max_sol}</td>
                                 </tr>
@@ -283,30 +301,44 @@ const addFooter = () => {
 
 // ------------------------------------------------------  API CALLS
 
-// get APOD API call
-const getImageOfTheDay = (store) => {
-    fetch(`http://localhost:3000/apod`)
-        .then(res => res.json())
-        .then(apod => updateStore(store, { apod }));
+// getDefaultHost is an Higher order function that returns a function
+const getDefaultHost = () => {
+    //lets suppose we are getting default host from an environment file
+    const DEFAULT_HOST = "http://localhost:3000/";
+    return endpoint => DEFAULT_HOST + endpoint;
+};
+
+const fetchJSON = (URL) => fetch(URL)
+    .then(res => res.json());
+
+// HOF get APOD API call
+const getImageOfTheDay = (store, getDefaultHostFn) => {
+    let getUrl = getDefaultHostFn();
+    fetchJSON(getUrl(`apod`))
+        .then(apod => updateStore(store, { apod },
+            (newState) => console.log(newState)));
 
 };
 
-// Get manifest API call
-const getRoverManifest = (store) => {
-    fetch(`http://localhost:3000/roverData/manifests`)
-        .then(res => res.json())
+// HOF Get manifest API call
+const getRoverManifest = (store, getDefaultHostFn) => {
+    let getUrl = getDefaultHostFn();
+    fetchJSON(getUrl(`roverData/manifests`))
         .then(({ roversManifest }) => {
-            updateStore(store, { roversManifest: roversManifest.map(r => r['photo_manifest']) });
+            updateStore(store, { roversManifest: roversManifest.map(r => r['photo_manifest']) },
+                (newState) => console.log(newState));
         });
 };
 
 
-// get rover photos API call
-const getRoverPhotos = (selectedRover, sol, store) => {
-    fetch(`http://localhost:3000/photos/${selectedRover}/${sol}`)
-        .then(res => res.json())
+// HOF get rover photos API call
+const getRoverPhotos = (store, getDefaultHostFn) => {
+    let { selectedRover, selectedSol } = store;
+    let getUrl = getDefaultHostFn();
+    fetchJSON(getUrl(`photos/${selectedRover}/${selectedSol}`))
         .then(({ photos }) => {
-            updateStore(store, { roverPhotos : photos });
+            updateStore(store, { roverPhotos : photos },
+                (newState) => console.log(newState));
         });
 };
 
