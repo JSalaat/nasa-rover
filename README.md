@@ -4,8 +4,11 @@
 ```
 $ git clone git@github.com:JSalaat/nasa-rover.git
 $ cd nasa-rover
-$ npm i
-$ npm run dev
+$ yarn install
+// get your api key from https://api.nasa.gov/ and paste replacing the DEMO_KEY
+// although this should also work
+$ echo API_KEY=DEMO_KEY > .env
+$ yarn dev
 ````
 
 then navigate to http://localhost:3000/
