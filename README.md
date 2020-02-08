@@ -1,6 +1,15 @@
 # Functional Programming with Javascript 
 
-## Student Instructions
+### Instructions to run the project
+```
+$ git clone git@github.com:JSalaat/nasa-rover.git
+$ cd nasa-rover
+$ npm i
+$ npm run dev
+````
+
+then navigate to http://localhost:3000/
+
 
 ### Big Picture
 
