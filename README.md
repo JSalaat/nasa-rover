@@ -1,7 +1,7 @@
 # Functional Programming with Javascript 
 
 ### Screenshot of the App
-<img src="https://raw.githubusercontent.com/mjunaidsalaat/nasa-rover/master/src/public/assets/img/screenshot.jpg" width="500" />
+<img src="https://raw.githubusercontent.com/JSalaat/nasa-rover/master/src/public/assets/img/screenshot.png" width="500" />
 
 
 ### Instructions to run the project
